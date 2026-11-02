@@ -1,0 +1,652 @@
+%% ========================================================================
+%  TEMI D'ESAME SVOLTI - Complementi di Matematica e Calcolo Numerico
+%  (Politecnico di Milano)
+%  ========================================================================
+%  Raccolta di 7 prove di laboratorio passate, risolte per intero.
+%  Ogni tema e' organizzato in celle indipendenti "%% Tn.k)", eseguibili
+%  singolarmente con Ctrl+Enter (come nel formulario). I valori numerici
+%  indicati nei commenti "-> atteso" sono stati calcolati con un motore
+%  di riferimento che replica fedelmente gli algoritmi MATLAB richiesti
+%  (Jacobi, bisezione, Newton, Heun, Eulero esplicito/implicito, trapezi,
+%  Simpson, polyfit, interpolazione lineare); per i metodi iterativi
+%  (Jacobi, Newton) il numero ESATTO di iterazioni puo' differire di
+%  qualche unita' rispetto a quello di una diversa ma equivalente
+%  implementazione (dipende dal criterio di arresto usato: incremento
+%  assoluto vs relativo), ma il VALORE della soluzione a convergenza e'
+%  comunque accurato alla tolleranza richiesta.
+%
+%  Le function ausiliarie (bisezione, newton, myJacobi, eulero, eulimp,
+%  heun) sono le stesse gia' viste nel formulario (Lab 5/10/11) e sono
+%  raccolte in fondo a questo file, come richiesto dalla sintassi MATLAB
+%  per gli script con local function.
+%
+%  Indice:
+%    TEMA 1 - 21 Giugno   2024
+%    TEMA 2 - 17 Luglio   2024
+%    TEMA 3 - 13 Settembre 2024
+%    TEMA 4 -  4 Novembre 2024
+%    TEMA 5 - 23 Gennaio  2025
+%    TEMA 6 - 11 Febbraio 2025
+%    TEMA 7 - 18 Giugno   2025
+%  ========================================================================
+
+
+%% ========================================================================
+%  TEMA 1 - Prova di Laboratorio del 21 Giugno 2024
+%  ========================================================================
+%  ESERCIZIO 1 (6 punti): matrice pentadiagonale "quasi periodica",
+%  determinante, autovalore minimo, fattorizzazione LU, metodo di Jacobi.
+%  ESERCIZIO 2 (6 punti): problema di Cauchy, metodo di Heun, bisezione
+%  sulla soluzione esatta, integrazione con i trapezi.
+
+%% T1.1) Esercizio 1, punti 1-2: costruzione di A, determinante e autovalore minimo
+% A (NxN): diagonale principale = primi N naturali positivi in ORDINE
+% DECRESCENTE moltiplicati per 10 (quindi A(1,1)=10N, A(N,N)=10); terza
+% sopradiagonale e terza sottodiagonale = -2; b = vettore di soli 1.
+N = 20;
+A = diag(10*(N:-1:1));                  % diagonale: 200,190,...,10
+for i = 1:N-3
+    A(i,i+3) = -2;                      % terza sopradiagonale
+    A(i+3,i) = -2;                      % terza sottodiagonale
+end
+b = ones(N,1);
+
+detA = det(A)
+% -> atteso: det(A) = 2.3790e+38
+
+lambda_min = min(eig(A))
+% -> atteso: lambda_min = 9.8670e+00
+% (la matrice ha autovalori tutti reali, essendo "quasi" diagonalmente
+%  dominante: elementi diagonali grandi rispetto ai soli due -2 fuori
+%  diagonale per riga)
+
+%% T1.2) Esercizio 1, punto 3: fattorizzazione LU e sistema triangolare
+[L,U,P] = lu(A);
+normL_inf = norm(L,inf)
+% -> atteso: ||L||_inf = 1.0501e+00
+
+% Risoluzione di Ax=b tramite la fattorizzazione: P*A = L*U, quindi
+% si risolve prima L*y = P*b (sostituzione in avanti), poi U*x = y
+% (sostituzione all'indietro)
+y = L \ (P*b);
+x = U \ y;
+normY_inf = norm(y,inf)
+normX_inf = norm(x,inf)
+% -> atteso: ||y||_inf = 1.0515e+00 , ||x||_inf = 1.0622e-01
+
+%% T1.3) Esercizio 1, punto 5: metodo iterativo di Jacobi
+x0 = zeros(N,1);
+toll = 1e-6; nitmax = 200;
+[xJ, nitJ] = myJacobi(A,b,x0,toll,nitmax);
+xe = A\b;                                % soluzione "esatta" di riferimento
+err_inf = norm(xJ-xe,inf)/norm(xe,inf);
+fprintf('Jacobi: iterazioni = %d\n', nitJ);
+fprintf('||xJ-xe||_inf/||xe||_inf = %.4e\n', err_inf);
+% -> atteso: iterazioni ~ 6 (converge molto rapidamente, essendo A ben
+%    condizionata rispetto al metodo di Jacobi: rho(B_J) piccolo),
+%    errore relativo ~ 1.6e-07
+
+%% T1.4) Esercizio 2, punto 1: metodo di Heun sul problema di Cauchy
+% y' = -y + e^{-t}(21t^2+5),  0<=t<=1,  y(0)=-1
+% soluzione esatta: y(t) = e^{-t}(7t^3+5t-1)
+f = @(t,y) -y + exp(-t).*(21*t.^2+5);
+yex = @(t) exp(-t).*(7*t.^3+5*t-1);
+
+h = 0.05;
+T = (0:h:1)';
+[T,Y] = heun(f,T,-1);
+Y2 = Y(2)                                % valore in t=0.05 (secondo nodo)
+% -> atteso: Y2 = -7.1235e-01
+
+%% T1.5) Esercizio 2, punti 2-4: errore, grafico, bisezione, integrale
+err_inf = norm(yex(T)-Y, inf)
+% -> atteso: ||y(T)-Y||_inf = 1.4451e-03
+
+figure;
+plot(T, yex(T), 'r-', T, Y, 'bo-'); grid on;
+legend('soluzione esatta','Heun, h=0.05'); xlabel('t'); ylabel('y');
+title('TEMA 1 - Esercizio 2: Heun vs soluzione esatta');
+
+% radice di y(t) (soluzione esatta) in [0,1] con la bisezione
+[alpha, nit_bis] = bisezione(yex, 0, 1, 1e-5);
+fprintf('alpha = %.4e  (nit bisezione = %d)\n', alpha, nit_bis);
+% -> atteso: alpha = 1.9034e-01
+
+% integrale I = int_0^1 y(t) dt: usando i valori approssimati (T,Y) di
+% Heun con la formula dei trapezi composita
+It = trapz(T,Y);
+I  = integral(yex,0,1);
+fprintf('I = %.4e , It = %.4e , |I-It| = %.4e\n', I, It, abs(I-It));
+% -> atteso: I = 1.4866e+00 , It = 1.4876e+00 , |I-It| = 9.9806e-04
+
+
+%% ========================================================================
+%  TEMA 2 - Prova di Laboratorio del 17 Luglio 2024
+%  ========================================================================
+%  ESERCIZIO 1 (6 punti): interpolazione polinomiale e spline lineare,
+%  confronto trapezi/Simpson con integral.
+%  ESERCIZIO 2 (6 punti): Eulero implicito, Newton sulla soluzione
+%  esatta confrontato con fzero.
+
+%% T2.1) Esercizio 1, punto 1: interpolazione polinomiale di f
+% f(x) = e^{cos(x)} / (x^2+1),  x in [0,1]
+f = @(x) exp(cos(x))./(x.^2+1);
+a = 0; b = 1;
+
+x10 = linspace(a,b,10);
+y10 = f(x10);
+p = polyfit(x10,y10,9);                 % polinomio interpolatore (grado 9)
+xm = (a+b)/2;
+p_xm = polyval(p,xm)
+z = linspace(a,b,100);
+err_p = max(abs(f(z)-polyval(p,z)))
+% -> atteso: p(xm) = 1.9241e+00 , err = 4.9430e-06
+
+%% T2.2) Esercizio 1, punto 2: spline lineare interpolante
+s1_xm = interp1(x10,y10,xm,'linear')
+err_s1 = max(abs(f(z)-interp1(x10,y10,z,'linear')))
+% -> atteso: s1(xm) = 1.9234e+00 , err = 1.2200e-02
+% (la spline lineare e' molto meno accurata del polinomio di grado 9 su
+%  10 nodi: l'errore e' circa 2500 volte piu' grande)
+
+%% T2.3) Esercizio 1, punto 3: integrale, trapezi (3 nodi) e Simpson (2 sottointervalli)
+I = integral(f,a,b)
+% -> atteso: I = 1.8889e+00
+
+x3 = linspace(a,b,3);                   % 3 nodi equispaziati: 0, 0.5, 1
+IT = trapz(x3, f(x3))
+% -> atteso: IT = 1.8562e+00
+
+ICS = (b-a)/6 * ( f(a) + 4*f((a+b)/2) + f(b) );   % Simpson, 2 sottointervalli
+% -> atteso: ICS = 1.8788e+00
+
+errT  = abs(IT - I)
+errCS = abs(ICS - I)
+% -> atteso: errT = 3.2733e-02 , errCS = 1.0101e-02
+% (coerente con il grado di precisione: Simpson e' molto piu' accurata
+%  dei trapezi a parita' di nodi usati)
+
+%% T2.4) Esercizio 2, punti 1-3: Eulero implicito sul problema di Cauchy
+% y' = (y+1)/t + 1,  1<=t<=2,  y(1)=-1
+% soluzione esatta: y(t) = t*log(t) - 1
+f2  = @(t,y) (y+1)./t + 1;
+dfy2 = @(t,y) 1./t;                     % derivata di f2 rispetto a y
+yex2 = @(t) t.*log(t) - 1;
+
+h = 0.01;
+T = (1:h:2)';
+[T,Y] = eulimp(f2,T,-1,dfy2,1e-6,100);
+YN = Y(end)
+% -> atteso: Y_N = 3.9131e-01
+
+err_inf = norm(yex2(T)-Y, inf)
+% -> atteso: ||y(T)-Y||_inf = 5.0125e-03
+
+figure;
+plot(T, yex2(T), 'r-', T, Y, 'b--'); grid on;
+legend('soluzione esatta','Eulero implicito, h=0.01'); xlabel('t'); ylabel('y');
+title('TEMA 2 - Esercizio 2: Eulero implicito vs soluzione esatta');
+
+%% T2.5) Esercizio 2, punto 4: radice della soluzione esatta, Newton vs fzero
+g  = @(t) t.*log(t) - 1;
+dg = @(t) log(t) + 1;
+[alphaNewt, nit] = newton(g, dg, 1, 1e-6, 100);
+alpha = fzero(g, 1.5);
+fprintf('alphaNewt = %.4e , alpha(fzero) = %.4e\n', alphaNewt, alpha);
+% -> atteso: alphaNewt = alpha = 1.7632e+00  (i due metodi coincidono
+%    alla precisione richiesta)
+
+
+%% ========================================================================
+%  TEMA 3 - Prova di Laboratorio del 13 Settembre 2024
+%  ========================================================================
+%  ESERCIZIO 1 (6 punti): grafico, fzero vs Newton, interpolazione
+%  polinomiale vs retta di regressione.
+%  ESERCIZIO 2 (6 punti): Heun, spline lineare sulla soluzione
+%  approssimata, confronto integrali.
+
+%% T3.1) Esercizio 1, punti 1-2: grafico e radice (fzero vs Newton)
+% f(x) = -log(x)*cos(x) - 0.5,  x in [2,3]
+f = @(x) -log(x).*cos(x) - 0.5;
+df = @(x) -cos(x)./x + log(x).*sin(x);   % derivata di f
+a = 2; b = 3;
+
+xx = linspace(a,b,200);
+figure; plot(xx, f(xx)); grid on; yline(0,'k--');
+title('TEMA 3 - f(x) = -log(x)cos(x) - 0.5 su [2,3]');
+
+alpha = fzero(f, [a b]);
+[alphaN, nitN] = newton(f, df, 2, 1e-5, 100);
+fprintf('alpha = %.4e , alphaN = %.4e , |alphaN-alpha| = %.4e\n', ...
+         alpha, alphaN, abs(alphaN-alpha));
+% -> atteso: alpha = alphaN = 2.2397e+00 , |alphaN-alpha| = 1.2492e-12
+
+%% T3.2) Esercizio 1, punti 3-4: interpolazione polinomiale e retta di regressione
+z5 = linspace(a,b,5);
+y5 = f(z5);
+xm = (a+b)/2;
+z  = linspace(a,b,100);
+
+p = polyfit(z5,y5,4);                   % polinomio interpolatore
+p_xm = polyval(p,xm)
+err_p = max(abs(f(z)-polyval(p,z)))
+% -> atteso: p(xm) = 2.3408e-01 , err = 5.3433e-05
+
+r = polyfit(z5,y5,1);                   % retta di regressione
+r_xm = polyval(r,xm)
+err_r = max(abs(f(z)-polyval(r,z)))
+% -> atteso: r(xm) = 2.1092e-01 , err = 2.8089e-02
+% (il polinomio interpolatore, pur di grado basso, approssima f molto
+%  meglio della semplice retta di regressione)
+
+%% T3.3) Esercizio 2, punti 1-3: Heun, errore, spline lineare sui dati (T,Y)
+% y' = y*sin(t) + sin(2t),  0<=t<=1,  y(0)=-2
+% soluzione esatta: y(t) = 2 - 2cos(t) - 2 e^{1-cos(t)}
+f3 = @(t,y) y.*sin(t) + sin(2*t);
+yex3 = @(t) 2 - 2*cos(t) - 2*exp(1-cos(t));
+
+h = 0.05;
+T = (0:h:1)';
+[T,Y] = heun(f3,T,-2);
+YN = Y(end)
+% -> atteso: YN = -2.2481e+00
+
+err_inf = norm(yex3(T)-Y, inf)
+% -> atteso: ||y(T)-Y||_inf = 2.7912e-04
+
+figure;
+plot(T, yex3(T), 'r-', T, Y, 'b--'); grid on;
+legend('soluzione esatta','Heun, h=0.05'); xlabel('t'); ylabel('y');
+title('TEMA 3 - Esercizio 2: Heun vs soluzione esatta');
+
+s1_13 = interp1(T,Y,1/3,'linear')
+% -> atteso: s1(1/3) = -2.0032e+00
+
+%% T3.4) Esercizio 2, punto 5: confronto integrali (trapezi su Y vs integral su y esatta)
+I  = integral(yex3,0,1);
+It = trapz(T,Y);
+fprintf('I = %.4e , It = %.4e , |I-It| = %.4e\n', I, It, abs(I-It));
+% -> atteso: I = -2.0498e+00 , It = -2.0501e+00 , |I-It| = 3.4332e-04
+
+
+%% ========================================================================
+%  TEMA 4 - Prova di Laboratorio del 4 Novembre 2024
+%  ========================================================================
+%  ESERCIZIO 1 (6 punti): matrice circolante-simile, determinante,
+%  condizionamento, raggio spettrale della matrice di iterazione di
+%  Jacobi, metodo di Jacobi.
+%  ESERCIZIO 2 (6 punti): Eulero implicito, confronto integral vs
+%  formula del punto medio composita (verifica ordine O(H^2)).
+
+%% T4.1) Esercizio 1, punti 1: costruzione di A, determinante e condizionamento
+% A (NxN): diagonale principale COSTANTE = sqrt(N); prima sopradiagonale
+% = 2; seconda sottodiagonale = -2; A(1,N) = A(N,1) = 1.
+N = 20;
+A = sqrt(N)*eye(N);
+for i = 1:N-1
+    A(i,i+1) = 2;                       % prima sopradiagonale
+end
+for i = 1:N-2
+    A(i+2,i) = -2;                      % seconda sottodiagonale
+end
+A(1,N) = 1;
+A(N,1) = 1;
+
+detA = det(A)
+% -> atteso: det(A) = 1.1442e+12
+
+invA = inv(A);
+cond_inf = norm(A,inf) * norm(invA,inf)
+% -> atteso: ||A||_inf ||A^{-1}||_inf = 1.6422e+01
+
+%% T4.2) Esercizio 1, punto 2: raggio spettrale della matrice di iterazione di Jacobi
+D = diag(diag(A));
+BJ = -D \ (A - D);                      % matrice di iterazione di Jacobi
+rhoBJ = max(abs(eig(BJ)))
+% -> atteso: rho(BJ) = 8.4698e-01
+% (essendo rho(BJ) < 1, il metodo di Jacobi converge per questa matrice)
+
+%% T4.3) Esercizio 1, punto 3: metodo di Jacobi
+b  = ones(N,1);
+x0 = zeros(N,1);
+toll = 1e-6; nitmax = 200;
+[xJ,nitJ] = myJacobi(A,b,x0,toll,nitmax);
+xe = A\b;
+err_rel = norm(xJ-xe,inf)/norm(xe,inf);
+fprintf('Jacobi: iterazioni = %d , ||xJ-xe||_inf/||xe||_inf = %.4e\n', nitJ, err_rel);
+% -> atteso: iterazioni ~ 66 (convergenza piu' lenta rispetto al TEMA 1,
+%    coerente con rho(BJ)=0.847 vicino a 1), errore relativo ~ 1.98e-06
+
+%% T4.4) Esercizio 2, punto 1: Eulero implicito sul problema di Cauchy
+% y' = y + e^t cos(t),  0<=t<=1,  y(0)=0
+% soluzione esatta: y(t) = e^t sin(t)
+f4 = @(t,y) y + exp(t).*cos(t);
+dfy4 = @(t,y) ones(size(y));            % d/dy[y + e^t cos t] = 1
+yex4 = @(t) exp(t).*sin(t);
+
+h = 0.01;
+T = (0:h:1)';
+[T,Y] = eulimp(f4,T,0,dfy4,1e-6,100);
+Ymax = max(Y)
+% -> atteso: Ymax = 2.3104e+00
+
+err_inf = norm(yex4(T)-Y, inf)
+% -> atteso: ||y(T)-Y||_inf = 2.3070e-02
+
+%% T4.5) Esercizio 2, punto 4: integral vs formula del punto medio composita
+I = integral(yex4,0,1)
+% -> atteso: I = 9.0933e-01
+
+m1 = 20; m2 = 40;
+H1 = 1/m1; xk1 = (0:H1:1); xmid1 = xk1(1:end-1)+H1/2;
+Ip20 = H1*sum(yex4(xmid1))
+H2 = 1/m2; xk2 = (0:H2:1); xmid2 = xk2(1:end-1)+H2/2;
+Ip40 = H2*sum(yex4(xmid2))
+% -> atteso: Ip20 = 9.0904e-01 , Ip40 = 9.0926e-01
+
+rapporto = abs(Ip20-I)/abs(Ip40-I)
+% -> atteso: rapporto ~ 4.0003e+00
+% (raddoppiando il numero di sottointervalli l'errore si riduce di un
+%  fattore ~4: conferma che la formula del punto medio composita ha
+%  ordine di convergenza O(H^2))
+
+
+%% ========================================================================
+%  TEMA 5 - Prova di Laboratorio del 23 Gennaio 2025
+%  ========================================================================
+%  ESERCIZIO 1 (6 punti): fzero, retta di regressione e scarto
+%  quadratico, interpolazione polinomiale.
+%  ESERCIZIO 2 (6 punti): Eulero esplicito, confronto integral vs
+%  trapezi compositi.
+
+%% T5.1) Esercizio 1, punto 1: radice con fzero
+% f(x) = cos(2x) + 3x - 2,  x in [0,2]
+f = @(x) cos(2*x) + 3*x - 2;
+alpha = fzero(f, [0 2])
+% -> atteso: alpha = 4.7015e-01
+
+%% T5.2) Esercizio 1, punto 2: retta di regressione e scarto quadratico
+z6 = linspace(0,2,6);
+y6 = f(z6);
+r = polyfit(z6,y6,1);
+r_alpha = polyval(r,alpha)
+S = sum( (y6 - polyval(r,z6)).^2 )
+% -> atteso: r(alpha) = -1.7767e-01 , S = 5.4239e-01
+
+%% T5.3) Esercizio 1, punto 3: polinomio interpolatore
+p = polyfit(z6,y6,5);
+p_alpha = polyval(p,alpha)
+x100 = linspace(0,2,100);
+err = max(abs(f(x100)-polyval(p,x100)))
+% -> atteso: p(alpha) = -2.9696e-04 , err = 3.4092e-03
+
+%% T5.4) Esercizio 2, punti 1-2: Eulero esplicito sul problema di Cauchy
+% y' = 2y(t-5),  0<=t<=1,  y(0)=1
+% soluzione esatta: y(t) = e^{t^2-10t}
+f5 = @(t,y) 2*y.*(t-5);
+yex5 = @(t) exp(t.^2-10*t);
+
+h = 0.001;
+T = (0:h:1)';
+[T,Y] = eulero(f5,T,1);
+YN = Y(end)
+% -> atteso: YN = 1.1834e-04
+
+err_inf = norm(yex5(T)-Y, inf)
+% -> atteso: ||y(T)-Y||_inf = 1.8659e-03
+
+%% T5.5) Esercizio 2, punto 3: integral vs trapezi compositi
+I  = integral(yex5,0,1)
+IT = trapz(T,Y)
+% -> atteso: I = 1.0212e-01 , IT = 1.0160e-01
+
+err_approx = abs(IT-I)
+% -> atteso: |IT-I| = 5.2112e-04
+
+
+%% ========================================================================
+%  TEMA 6 - Prova di Laboratorio del 11 Febbraio 2025
+%  ========================================================================
+%  ESERCIZIO 1 (6 punti): ricerca di un massimo relativo con Newton
+%  sulla derivata, integral, spline lineare, trapezi compositi.
+%  ESERCIZIO 2 (6 punti): Heun, retta di regressione sulla soluzione
+%  esatta.
+
+%% T6.1) Esercizio 1, punti 1-2: grafico e massimo relativo (Newton su f')
+% f(x) = sin(x) + e^{-x},  x in [0,2]
+f  = @(x) sin(x) + exp(-x);
+df = @(x) cos(x) - exp(-x);             % f'(x)
+d2f = @(x) -sin(x) - exp(-x);           % f''(x), serve a Newton per df
+
+xx = linspace(0,2,200);
+figure; plot(xx, f(xx)); grid on;
+title('TEMA 6 - f(x) = sin(x) + e^{-x} su [0,2]');
+
+[xmax, nitmax_newton] = newton(df, d2f, 1.5, 1e-6, 100);
+fxmax = f(xmax);
+fprintf('xmax = %.4e , f(xmax) = %.4e\n', xmax, fxmax);
+% -> atteso: xmax = 1.2927e+00 , f(xmax) = 1.2361e+00
+% (xmax e' il punto di massimo relativo: li' f'(x)=0 e f''(x)<0)
+
+%% T6.2) Esercizio 1, punti 3-4: integral, spline lineare, trapezi compositi
+I = integral(f,0,2)
+% -> atteso: I = 2.2808e+00
+
+z = (0:0.1:2)';                         % nodi equispaziati, passo h=0.1
+yz = f(z);
+
+s_xmax = interp1(z,yz,xmax,'linear');
+err_s  = abs(fxmax - s_xmax);
+It     = trapz(z,yz);
+err_I  = abs(I - It);
+fprintf('s(xmax)=%.4e |f(xmax)-s(xmax)|=%.4e  It=%.4e |I-It|=%.4e\n', ...
+         s_xmax, err_s, It, err_I);
+% -> atteso: s(xmax) = 1.2359e+00 , |f(xmax)-s(xmax)| = 2.2701e-04
+%            It = 2.2804e+00 , |I-It| = 4.5989e-04
+
+%% T6.3) Esercizio 2, punti 1-2: Heun sul problema di Cauchy
+% y' = 3(t+1) - y,  1<=t<=2,  y(1)=4
+% soluzione esatta: y(t) = 3t + e^{1-t}
+f6 = @(t,y) 3*(t+1) - y;
+yex6 = @(t) 3*t + exp(1-t);
+
+h = 0.01;
+T = (1:h:2)';
+[T,Y] = heun(f6,T,4);
+Yfin = Y(end)
+% -> atteso: Yfin = 6.3679e+00
+
+err_inf = norm(yex6(T)-Y, inf)
+% -> atteso: ||y(T)-Y||_inf = 6.1775e-06
+
+%% T6.4) Esercizio 2, punto 3: retta di regressione sulla soluzione esatta
+x10 = linspace(1,2,10);
+y10 = yex6(x10);
+r = polyfit(x10,y10,1);
+m = r(1); q = r(2);
+r_15 = polyval(r,1.5);
+fprintf('m = %.4e , q = %.4e , r(1.5) = %.4e\n', m, q, r_15);
+% -> atteso: m = 2.3750e+00 , q = 1.5754e+00 , r(1.5) = 5.1379e+00
+
+
+%% ========================================================================
+%  TEMA 7 - Prova di Laboratorio del 18 Giugno 2025
+%  ========================================================================
+%  ESERCIZIO 1 (punteggio 2/2/2): spline lineare, radici reali del
+%  polinomio interpolatore, bisezione.
+%  ESERCIZIO 2 (punteggio 1/2/1/2): Heun con studio dell'ordine di
+%  convergenza, integrale con i trapezi compositi (format long).
+
+%% T7.1) Esercizio 1, punto 1: spline lineare
+% f(x) = cos(pi x) / [ x^2 (1+log(x)) ],  x in [2,4]
+f = @(x) cos(pi*x) ./ ( x.^2 .* (1+log(x)) );
+x6 = linspace(2,4,6);
+y6 = f(x6);
+
+s1_25 = interp1(x6,y6,2.5,'linear')
+% -> atteso: s1(2.5) = 8.7435e-03
+
+%% T7.2) Esercizio 1, punto 2: polinomio interpolatore e sue radici reali in [2,4]
+p = polyfit(x6,y6,5);
+r = roots(p);
+r_reali = r(abs(imag(r)) < 1e-6);
+r_reali = real(r_reali);
+r_in_24 = sort(r_reali(r_reali >= 2 & r_reali <= 4))
+% -> atteso: r_in_24 = [2.4996e+00 ; 3.4987e+00]
+% (vicine agli zeri ESATTI di cos(pi x) in [2,4], cioe' x=2.5 e x=3.5,
+%  dove cos(pi*2.5)=cos(pi*3.5)=0)
+
+%% T7.3) Esercizio 1, punto 3: radice di f con la bisezione
+[alpha_f, nit] = bisezione(f, 2, 3, 1e-6);
+fprintf('radice di f in [2,3] = %.4e  (nit = %d)\n', alpha_f, nit);
+% -> atteso: alpha_f = 2.5000e+00
+% (e' uno zero ESATTO di f, perche' cos(pi*2.5) = cos(5pi/2) = 0)
+
+%% T7.4) Esercizio 2, punti 1-3: Heun e verifica dell'ordine di convergenza
+% y' = -3y + t,  0<=t<=10,  y(0)=0
+% soluzione esatta: y(t) = (1/9)(e^{-3t}-1) + (1/3)t
+f7 = @(t,y) -3*y + t;
+yex7 = @(t) (1/9)*(exp(-3*t)-1) + (1/3)*t;
+
+hvals = [0.1 0.01 0.001 0.0001];
+errori = zeros(size(hvals));
+fprintf('   h          errore relativo Heun\n');
+for k = 1:length(hvals)
+    h = hvals(k);
+    T = (0:h:10)';
+    [T,Y] = heun(f7,T,0);
+    errori(k) = norm(yex7(T)-Y,inf) / norm(yex7(T),inf);
+    fprintf('%8.4g   %14.4e\n', h, errori(k));
+end
+% -> atteso: h=0.1 -> 2.3876e-04 ; h=0.01 -> 1.9462e-06 ;
+%            h=0.001 -> 1.9071e-08 ; h=0.0001 -> 1.9033e-10
+for k = 2:length(hvals)
+    fprintf('rapporto errori(%d)/errori(%d) = %.2f\n', k-1, k, errori(k-1)/errori(k));
+end
+% -> atteso: i rapporti sono circa 100 (decuplicando il numero di passi,
+%    cioe' dividendo h per 10, l'errore si riduce di un fattore ~100):
+%    CONFERMA che il metodo di Heun ha ORDINE DI CONVERGENZA 2.
+
+%% T7.5) Esercizio 2, punto 4: integrale con i trapezi compositi (format long)
+h = 0.0001;
+T = (0:h:10)';
+[T,Y] = heun(f7,T,0);
+VALORE = trapz(T,Y);
+format long
+VALORE
+format short
+% -> atteso (format long): VALORE = 15.592592593426065
+% (valore esatto dell'integrale: int_0^10 y(t)dt = 421/27 = 15.59259...,
+%  quindi l'approssimazione con i trapezi compositi, costruita sui
+%  valori Heun molto accurati per h=0.0001, coincide con l'esatto fino
+%  alla settima cifra decimale circa)
+
+
+%% ========================================================================
+%  LOCAL FUNCTIONS (raccolte qui in fondo, come richiesto dalla sintassi
+%  MATLAB per gli script con local function: devono stare tutte DOPO
+%  qualsiasi codice eseguibile dello script). Sono le stesse gia' viste
+%  nel formulario (Lab 5, Lab 10, Lab 11).
+%  ========================================================================
+
+function [x, nit] = myJacobi(A, b, x0, toll, nitmax)
+% [x,nit] = myJacobi(A,b,x0,toll,nitmax)
+% Metodo di Jacobi per la risoluzione di A*x=b.
+    D = diag(diag(A));
+    R = A - D;
+    x = x0;
+    nit = 0;
+    err = toll + 1;
+    while err > toll && nit < nitmax
+        xnew = D \ (b - R*x);
+        err  = norm(xnew-x, inf);
+        x    = xnew;
+        nit  = nit + 1;
+    end
+end
+
+function [x, nit] = bisezione(f, a, b, toll)
+% BISEZIONE  Calcola uno zero di f in [a,b] con il metodo di bisezione.
+%   [x, nit] = bisezione(f, a, b, toll)
+    if f(a)*f(b) > 0
+        error('bisezione: f(a) e f(b) devono avere segno discorde');
+    end
+    a0 = a; b0 = b;
+    x   = (a0+b0)/2;
+    err = (b0-a0)/2;
+    nit = 0;
+    while err > toll
+        if f(x) == 0
+            break
+        elseif f(a0)*f(x) < 0
+            b0 = x;
+        else
+            a0 = x;
+        end
+        x   = (a0+b0)/2;
+        err = err/2;
+        nit = nit + 1;
+    end
+end
+
+function [x, nit] = newton(f, df, x0, toll, nitmax)
+% NEWTON  Calcola uno zero di f con il metodo di Newton.
+%   [x, nit] = newton(f, df, x0, toll, nitmax)
+    x   = x0;
+    nit = 0;
+    dx  = toll + 1;
+    while dx > toll && nit < nitmax
+        x1  = x - f(x)/df(x);
+        dx  = abs(x1 - x);
+        x   = x1;
+        nit = nit + 1;
+    end
+end
+
+function [T,U] = eulero(fun,T,y0)
+% [T,U] = eulero(fun,T,y0)  - Eulero esplicito, ordine 1.
+T = T(:);
+N = length(T)-1;
+U = zeros(N+1,1);
+U(1) = y0;
+for n = 1:N
+    h = T(n+1)-T(n);
+    U(n+1) = U(n) + h*fun(T(n),U(n));
+end
+end
+
+function [T,U] = eulimp(fun,T,y0,dfy,toll,nitmax)
+% [T,U] = eulimp(fun,T,y0,dfy,toll,nitmax) - Eulero implicito, ordine 1,
+% assolutamente stabile per ogni h. Risolve F(Y)=0 con Newton ad ogni passo.
+T = T(:);
+N = length(T)-1;
+U = zeros(N+1,1);
+U(1) = y0;
+for n = 1:N
+    h = T(n+1)-T(n);
+    Y = U(n);
+    err = toll+1; it = 0;
+    while err > toll && it < nitmax
+        Fy  = Y - U(n) - h*fun(T(n+1),Y);
+        dFy = 1 - h*dfy(T(n+1),Y);
+        Ynew = Y - Fy/dFy;
+        err = abs(Ynew-Y);
+        Y = Ynew;
+        it = it+1;
+    end
+    U(n+1) = Y;
+end
+end
+
+function [T,U] = heun(fun,T,y0)
+% [T,U] = heun(fun,T,y0) - metodo di Heun (predictor-corrector), ordine 2.
+T = T(:);
+N = length(T)-1;
+U = zeros(N+1,1);
+U(1) = y0;
+for n = 1:N
+    h  = T(n+1)-T(n);
+    k1 = fun(T(n),U(n));
+    U(n+1) = U(n) + (h/2)*( k1 + fun(T(n+1), U(n)+h*k1) );
+end
+end
